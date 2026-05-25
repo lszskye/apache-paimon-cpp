@@ -1,0 +1,146 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+#include "paimon/defs.h"
+
+namespace paimon {
+
+const char Options::FIELDS_SEPARATOR[] = ",";
+const char Options::FIELDS_PREFIX[] = "fields";
+const char Options::AGG_FUNCTION[] = "aggregate-function";
+const char Options::DEFAULT_AGG_FUNCTION[] = "default-aggregate-function";
+const char Options::IGNORE_RETRACT[] = "ignore-retract";
+const char Options::DISTINCT[] = "distinct";
+const char Options::LIST_AGG_DELIMITER[] = "list-agg-delimiter";
+const char Options::SEQUENCE_GROUP[] = "sequence-group";
+
+const char Options::BUCKET[] = "bucket";
+const char Options::BUCKET_KEY[] = "bucket-key";
+const char Options::FILE_FORMAT[] = "file.format";
+const char Options::FILE_SYSTEM[] = "file-system";
+const char Options::TARGET_FILE_SIZE[] = "target-file-size";
+const char Options::BLOB_TARGET_FILE_SIZE[] = "blob.target-file-size";
+const char Options::PAGE_SIZE[] = "page-size";
+const char Options::PARTITION_DEFAULT_NAME[] = "partition.default-name";
+const char Options::FILE_COMPRESSION[] = "file.compression";
+const char Options::FILE_COMPRESSION_ZSTD_LEVEL[] = "file.compression.zstd-level";
+const char Options::MANIFEST_TARGET_FILE_SIZE[] = "manifest.target-file-size";
+const char Options::MANIFEST_FORMAT[] = "manifest.format";
+const char Options::MANIFEST_COMPRESSION[] = "manifest.compression";
+const char Options::MANIFEST_MERGE_MIN_COUNT[] = "manifest.merge-min-count";
+const char Options::MANIFEST_FULL_COMPACTION_FILE_SIZE[] =
+    "manifest.full-compaction-threshold-size";
+const char Options::SOURCE_SPLIT_TARGET_SIZE[] = "source.split.target-size";
+const char Options::SOURCE_SPLIT_OPEN_FILE_COST[] = "source.split.open-file-cost";
+const char Options::SCAN_SNAPSHOT_ID[] = "scan.snapshot-id";
+const char Options::SCAN_MODE[] = "scan.mode";
+const char Options::READ_BATCH_SIZE[] = "read.batch-size";
+const char Options::WRITE_BATCH_SIZE[] = "write.batch-size";
+const char Options::WRITE_BUFFER_SIZE[] = "write-buffer-size";
+const char Options::WRITE_BUFFER_SPILLABLE[] = "write-buffer-spillable";
+const char Options::WRITE_BUFFER_SPILL_MAX_DISK_SIZE[] = "write-buffer-spill.max-disk-size";
+const char Options::LOCAL_SORT_MAX_NUM_FILE_HANDLES[] = "local-sort.max-num-file-handles";
+const char Options::SPILL_COMPRESSION[] = "spill-compression";
+const char Options::SPILL_COMPRESSION_ZSTD_LEVEL[] = "spill-compression.zstd-level";
+const char Options::SNAPSHOT_NUM_RETAINED_MIN[] = "snapshot.num-retained.min";
+const char Options::SNAPSHOT_NUM_RETAINED_MAX[] = "snapshot.num-retained.max";
+const char Options::SNAPSHOT_TIME_RETAINED[] = "snapshot.time-retained";
+const char Options::SNAPSHOT_EXPIRE_LIMIT[] = "snapshot.expire.limit";
+const char Options::SNAPSHOT_CLEAN_EMPTY_DIRECTORIES[] = "snapshot.clean-empty-directories";
+const char Options::COMMIT_FORCE_COMPACT[] = "commit.force-compact";
+const char Options::COMMIT_TIMEOUT[] = "commit.timeout";
+const char Options::COMMIT_MAX_RETRIES[] = "commit.max-retries";
+const char Options::SEQUENCE_FIELD[] = "sequence.field";
+const char Options::SEQUENCE_FIELD_SORT_ORDER[] = "sequence.field.sort-order";
+const char Options::MERGE_ENGINE[] = "merge-engine";
+const char Options::SORT_ENGINE[] = "sort-engine";
+const char Options::IGNORE_DELETE[] = "ignore-delete";
+const char Options::FIELDS_DEFAULT_AGG_FUNC[] = "fields.default-aggregate-function";
+const char Options::DELETION_VECTORS_ENABLED[] = "deletion-vectors.enabled";
+const char Options::DELETION_VECTOR_INDEX_FILE_TARGET_SIZE[] =
+    "deletion-vector.index-file.target-size";
+const char Options::DELETION_VECTOR_BITMAP64[] = "deletion-vectors.bitmap64";
+const char Options::CHANGELOG_PRODUCER[] = "changelog-producer";
+const char Options::FORCE_LOOKUP[] = "force-lookup";
+const char Options::PARTIAL_UPDATE_REMOVE_RECORD_ON_DELETE[] =
+    "partial-update.remove-record-on-delete";
+const char Options::PARTIAL_UPDATE_REMOVE_RECORD_ON_SEQUENCE_GROUP[] =
+    "partial-update.remove-record-on-sequence-group";
+const char Options::SCAN_FALLBACK_BRANCH[] = "scan.fallback-branch";
+const char Options::BRANCH[] = "branch";
+const char Options::FILE_INDEX_READ_ENABLED[] = "file-index.read.enabled";
+const char Options::DATA_FILE_EXTERNAL_PATHS[] = "data-file.external-paths";
+const char Options::DATA_FILE_EXTERNAL_PATHS_STRATEGY[] = "data-file.external-paths.strategy";
+const char Options::DATA_FILE_PREFIX[] = "data-file.prefix";
+const char Options::INDEX_FILE_IN_DATA_FILE_DIR[] = "index-file-in-data-file-dir";
+const char Options::ROW_TRACKING_ENABLED[] = "row-tracking.enabled";
+const char Options::ROW_TRACKING_PARTITION_GROUP_ON_COMMIT[] =
+    "row-tracking.partition-group-on-commit";
+const char Options::DATA_EVOLUTION_ENABLED[] = "data-evolution.enabled";
+const char Options::PARTITION_GENERATE_LEGACY_NAME[] = "partition.legacy-name";
+const char Options::BLOB_AS_DESCRIPTOR[] = "blob-as-descriptor";
+const char Options::BLOB_FIELD[] = "blob-field";
+const char Options::BLOB_DESCRIPTOR_FIELD[] = "blob-descriptor-field";
+const char Options::FALLBACK_BLOB_DESCRIPTOR_FIELD[] = "blob.stored-descriptor-fields";
+const char Options::BLOB_VIEW_FIELD[] = "blob-view-field";
+const char Options::BLOB_EXTERNAL_STORAGE_FIELD[] = "blob-external-storage-field";
+const char Options::BLOB_EXTERNAL_STORAGE_PATH[] = "blob-external-storage-path";
+const char Options::GLOBAL_INDEX_ENABLED[] = "global-index.enabled";
+const char Options::GLOBAL_INDEX_THREAD_NUM[] = "global-index.thread-num";
+const char Options::GLOBAL_INDEX_EXTERNAL_PATH[] = "global-index.external-path";
+const char Options::AGGREGATION_REMOVE_RECORD_ON_DELETE[] = "aggregation.remove-record-on-delete";
+const char Options::TABLE_READ_SEQUENCE_NUMBER_ENABLED[] = "table-read.sequence-number.enabled";
+const char Options::KEY_VALUE_SEQUENCE_NUMBER_ENABLED[] = "key-value.sequence_number.enabled";
+const char Options::SCAN_TIMESTAMP_MILLIS[] = "scan.timestamp-millis";
+const char Options::SCAN_TIMESTAMP[] = "scan.timestamp";
+const char Options::SCAN_TAG_NAME[] = "scan.tag-name";
+const char Options::WRITE_ONLY[] = "write-only";
+const char Options::COMPACTION_MIN_FILE_NUM[] = "compaction.min.file-num";
+const char Options::COMPACTION_FORCE_REWRITE_ALL_FILES[] = "compaction.force-rewrite-all-files";
+const char Options::COMPACTION_OPTIMIZATION_INTERVAL[] = "compaction.optimization-interval";
+const char Options::COMPACTION_TOTAL_SIZE_THRESHOLD[] = "compaction.total-size-threshold";
+const char Options::COMPACTION_INCREMENTAL_SIZE_THRESHOLD[] =
+    "compaction.incremental-size-threshold";
+const char Options::COMPACT_OFFPEAK_START_HOUR[] = "compaction.offpeak.start.hour";
+const char Options::COMPACT_OFFPEAK_END_HOUR[] = "compaction.offpeak.end.hour";
+const char Options::COMPACTION_OFFPEAK_RATIO[] = "compaction.offpeak-ratio";
+const char Options::LOOKUP_CACHE_BLOOM_FILTER_ENABLED[] = "lookup.cache.bloom.filter.enabled";
+const char Options::LOOKUP_CACHE_BLOOM_FILTER_FPP[] = "lookup.cache.bloom.filter.fpp";
+const char Options::LOOKUP_REMOTE_FILE_ENABLED[] = "lookup.remote-file.enabled";
+const char Options::LOOKUP_REMOTE_LEVEL_THRESHOLD[] = "lookup.remote-file.level-threshold";
+const char Options::LOOKUP_CACHE_SPILL_COMPRESSION[] = "lookup.cache-spill-compression";
+const char Options::CACHE_PAGE_SIZE[] = "cache-page-size";
+const char Options::FILE_FORMAT_PER_LEVEL[] = "file.format.per.level";
+const char Options::FILE_COMPRESSION_PER_LEVEL[] = "file.compression.per.level";
+const char Options::COMPACTION_MAX_SIZE_AMPLIFICATION_PERCENT[] =
+    "compaction.max-size-amplification-percent";
+const char Options::COMPACTION_SIZE_RATIO[] = "compaction.size-ratio";
+const char Options::NUM_SORTED_RUNS_COMPACTION_TRIGGER[] = "num-sorted-run.compaction-trigger";
+const char Options::NUM_SORTED_RUNS_STOP_TRIGGER[] = "num-sorted-run.stop-trigger";
+const char Options::NUM_LEVELS[] = "num-levels";
+const char Options::COMPACTION_FORCE_UP_LEVEL_0[] = "compaction.force-up-level-0";
+const char Options::LOOKUP_WAIT[] = "lookup-wait";
+const char Options::LOOKUP_COMPACT[] = "lookup-compact";
+const char Options::LOOKUP_COMPACT_MAX_INTERVAL[] = "lookup-compact.max-interval";
+const char Options::LOOKUP_CACHE_MAX_MEMORY_SIZE[] = "lookup.cache-max-memory-size";
+const char Options::LOOKUP_CACHE_HIGH_PRIO_POOL_RATIO[] = "lookup.cache.high-priority-pool-ratio";
+const char Options::BUCKET_FUNCTION_TYPE[] = "bucket-function.type";
+const char Options::LOOKUP_CACHE_FILE_RETENTION[] = "lookup.cache-file-retention";
+const char Options::LOOKUP_CACHE_MAX_DISK_SIZE[] = "lookup.cache-max-disk-size";
+}  // namespace paimon
