@@ -1,0 +1,760 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+#include "paimon/common/memory/memory_segment.h"
+
+#include <climits>
+#include <cstdlib>
+#include <limits>
+#include <string>
+
+#include "gtest/gtest.h"
+#include "paimon/common/utils/date_time_utils.h"
+#include "paimon/memory/memory_pool.h"
+#include "paimon/testing/utils/testharness.h"
+
+namespace paimon::test {
+
+TEST(MemorySegmentTest, TestByteAccess) {
+    auto pool = paimon::GetDefaultPool();
+    int32_t page_size = 64 * 1024;
+    MemorySegment segment = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+
+    int64_t seed = DateTimeUtils::GetCurrentUTCTimeUs();
+    std::srand(seed);
+    for (int32_t i = 0; i < page_size; i++) {
+        segment.Put(i, static_cast<char>(std::rand()));
+    }
+    std::srand(seed);
+    for (int32_t i = 0; i < page_size; i++) {
+        ASSERT_EQ(segment.Get(i), static_cast<char>(std::rand()))
+            << "seed: " << seed << ", idx: " << i;
+    }
+
+    // test expected correct behavior, random access
+
+    std::srand(seed);
+    bool* occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % page_size;
+        if (occupied[pos]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+        }
+        segment.Put(pos, static_cast<char>(std::rand()));
+    }
+    delete[] occupied;
+
+    std::srand(seed);
+    occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % page_size;
+
+        if (occupied[pos]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+        }
+
+        ASSERT_EQ(segment.Get(pos), static_cast<char>(std::rand()))
+            << "seed: " << seed << ", idx: " << pos;
+    }
+    delete[] occupied;
+}
+
+TEST(MemorySegmentTest, TestBooleanAccess) {
+    auto pool = paimon::GetDefaultPool();
+    int32_t page_size = 64 * 1024;
+    MemorySegment segment = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+
+    int64_t seed = DateTimeUtils::GetCurrentUTCTimeUs();
+    std::srand(seed);
+    bool* occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % page_size;
+        if (occupied[pos]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+        }
+        segment.PutValue<bool>(pos, static_cast<bool>(std::rand() % 2));
+    }
+    delete[] occupied;
+
+    std::srand(seed);
+    occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % page_size;
+        if (occupied[pos]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+        }
+
+        ASSERT_EQ(segment.GetValue<bool>(pos), static_cast<bool>(std::rand() % 2))
+            << "seed: " << seed << ", idx: " << pos;
+    }
+    delete[] occupied;
+}
+
+TEST(MemorySegmentTest, TestEqualTo) {
+    auto pool = paimon::GetDefaultPool();
+    int32_t page_size = 64 * 1024;
+    MemorySegment seg1 = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+    MemorySegment seg2 = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+
+    Bytes reference_array(page_size, pool.get());
+    seg1.Put(0, reference_array);
+    seg2.Put(0, reference_array);
+
+    int32_t i = paimon::test::RandomNumber(0, (page_size - 8) - 1);
+    seg1.Put(i, static_cast<char>(10));
+    ASSERT_FALSE(seg1.EqualTo(seg2, i, i, 9)) << "rand value:" << i;
+
+    seg1.Put(i, static_cast<char>(0));
+    ASSERT_TRUE(seg1.EqualTo(seg2, i, i, 9)) << "rand value:" << i;
+
+    seg1.Put(i + 8, static_cast<char>(10));
+    ASSERT_FALSE(seg1.EqualTo(seg2, i, i, 9)) << "rand value:" << i;
+}
+
+TEST(MemorySegmentTest, TestCompare) {
+    auto pool = paimon::GetDefaultPool();
+    int32_t page_size = 64 * 1024;
+    MemorySegment seg1 = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+    MemorySegment seg2 = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+
+    Bytes reference_array(page_size, pool.get());
+    seg1.Put(0, reference_array);
+    seg2.Put(0, reference_array);
+
+    int32_t i = paimon::test::RandomNumber(0, (page_size - 8) - 1);
+    seg1.Put(i, static_cast<char>(10));
+    ASSERT_GT(seg1.Compare(seg2, i, i, 9, 9), 0);
+
+    seg1.Put(i, static_cast<char>(0));
+    ASSERT_EQ(seg1.Compare(seg2, i, i, 9, 9), 0);
+
+    seg2.Put(i + 8, static_cast<char>(10));
+    ASSERT_EQ(seg1.Compare(seg2, i, i, 7, 7), 0);
+    ASSERT_LT(seg1.Compare(seg2, i, i, 9, 9), 0);
+
+    // Verify big-endian byte-order comparison semantics within a single 8-byte block.
+    // On little-endian machines, naive native-endian uint64 comparison would give wrong results.
+    MemorySegment seg3 = MemorySegment::AllocateHeapMemory(16, pool.get());
+    MemorySegment seg4 = MemorySegment::AllocateHeapMemory(16, pool.get());
+    Bytes zeros(16, pool.get());
+    seg3.Put(0, zeros);
+    seg4.Put(0, zeros);
+
+    // seg3: [0x00, 0x01, 0, 0, 0, 0, 0, 0] at offset 0
+    // seg4: [0x01, 0x00, 0, 0, 0, 0, 0, 0] at offset 0
+    // Lexicographic (byte-order) comparison: first byte 0x00 < 0x01, so seg3 < seg4.
+    seg3.Put(1, static_cast<char>(0x01));
+    seg4.Put(0, static_cast<char>(0x01));
+    ASSERT_LT(seg3.Compare(seg4, 0, 0, 8), 0);
+    ASSERT_GT(seg4.Compare(seg3, 0, 0, 8), 0);
+
+    // seg3: [0x01, 0x02, 0, 0, 0, 0, 0, 0]
+    // seg4: [0x01, 0x01, 0, 0, 0, 0, 0, 0]
+    // First bytes equal (0x01 == 0x01), second byte 0x02 > 0x01, so seg3 > seg4.
+    seg3.Put(0, static_cast<char>(0x01));
+    seg3.Put(1, static_cast<char>(0x02));
+    seg4.Put(0, static_cast<char>(0x01));
+    seg4.Put(1, static_cast<char>(0x01));
+    ASSERT_GT(seg3.Compare(seg4, 0, 0, 8), 0);
+    ASSERT_LT(seg4.Compare(seg3, 0, 0, 8), 0);
+}
+
+TEST(MemorySegmentTest, TestCharAccess) {
+    auto pool = paimon::GetDefaultPool();
+    int32_t page_size = 64 * 1024;
+    MemorySegment segment = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+
+    int64_t seed = DateTimeUtils::GetCurrentUTCTimeUs();
+    std::srand(seed);
+
+    for (int32_t i = 0; i <= page_size - 2; i += 2) {
+        segment.PutValue<char16_t>(i, static_cast<char>(std::rand() % (CHAR_MAX)));
+    }
+
+    std::srand(seed);
+    for (int32_t i = 0; i <= page_size - 2; i += 2) {
+        ASSERT_EQ(segment.GetValue<char16_t>(i), static_cast<char>(std::rand() % (CHAR_MAX)))
+            << "seed: " << seed << ", idx: " << i;
+    }
+
+    // test expected correct behavior, random access
+
+    std::srand(seed);
+    bool* occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % (page_size - 1);
+        if (occupied[pos] || occupied[pos + 1]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+            occupied[pos + 1] = true;
+        }
+        segment.PutValue<char16_t>(pos, static_cast<char>(std::rand() % (CHAR_MAX)));
+    }
+    delete[] occupied;
+
+    std::srand(seed);
+    occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % (page_size - 1);
+        if (occupied[pos] || occupied[pos + 1]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+            occupied[pos + 1] = true;
+        }
+
+        ASSERT_EQ(segment.GetValue<char16_t>(pos), static_cast<char>(std::rand() % (CHAR_MAX)))
+            << "seed: " << seed << ", idx:" << pos;
+    }
+    delete[] occupied;
+}
+
+TEST(MemorySegmentTest, TestShortAccess) {
+    auto pool = paimon::GetDefaultPool();
+    int32_t page_size = 64 * 1024;
+    MemorySegment segment = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+
+    int64_t seed = DateTimeUtils::GetCurrentUTCTimeUs();
+    std::srand(seed);
+
+    for (int32_t i = 0; i <= page_size - 2; i += 2) {
+        segment.PutValue<int16_t>(i, static_cast<int16_t>(std::rand()));
+    }
+
+    std::srand(seed);
+    for (int32_t i = 0; i <= page_size - 2; i += 2) {
+        ASSERT_EQ(segment.GetValue<int16_t>(i), static_cast<int16_t>(std::rand()))
+            << "seed: " << seed << ", idx:" << i;
+    }
+
+    // test expected correct behavior, random access
+
+    std::srand(seed);
+    bool* occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % (page_size - 1);
+        if (occupied[pos] || occupied[pos + 1]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+            occupied[pos + 1] = true;
+        }
+        segment.PutValue<int16_t>(pos, static_cast<int16_t>(std::rand()));
+    }
+    delete[] occupied;
+
+    std::srand(seed);
+    occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % (page_size - 1);
+        if (occupied[pos] || occupied[pos + 1]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+            occupied[pos + 1] = true;
+        }
+
+        ASSERT_EQ(segment.GetValue<int16_t>(pos), static_cast<int16_t>(std::rand()))
+            << "seed: " << seed << ", idx:" << pos;
+    }
+    delete[] occupied;
+}
+
+TEST(MemorySegmentTest, TestIntAccess) {
+    auto pool = paimon::GetDefaultPool();
+    int32_t page_size = 64 * 1024;
+    MemorySegment segment = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+
+    int64_t seed = DateTimeUtils::GetCurrentUTCTimeUs();
+    std::srand(seed);
+
+    for (int32_t i = 0; i <= page_size - 4; i += 4) {
+        segment.PutValue<int32_t>(i, static_cast<int32_t>(std::rand()));
+    }
+
+    std::srand(seed);
+    for (int32_t i = 0; i <= page_size - 4; i += 4) {
+        ASSERT_EQ(segment.GetValue<int32_t>(i), static_cast<int32_t>(std::rand()))
+            << "seed: " << seed << ", idx:" << i;
+    }
+
+    // test expected correct behavior, random access
+
+    std::srand(seed);
+    bool* occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % (page_size - 3);
+        if (occupied[pos] || occupied[pos + 1] || occupied[pos + 2] || occupied[pos + 3]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+            occupied[pos + 1] = true;
+            occupied[pos + 2] = true;
+            occupied[pos + 3] = true;
+        }
+        segment.PutValue<int32_t>(pos, static_cast<int32_t>(std::rand()));
+    }
+    delete[] occupied;
+
+    std::srand(seed);
+    occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % (page_size - 3);
+        if (occupied[pos] || occupied[pos + 1] || occupied[pos + 2] || occupied[pos + 3]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+            occupied[pos + 1] = true;
+            occupied[pos + 2] = true;
+            occupied[pos + 3] = true;
+        }
+
+        ASSERT_EQ(segment.GetValue<int32_t>(pos), static_cast<int32_t>(std::rand()))
+            << "seed: " << seed << ", idx:" << pos;
+    }
+    delete[] occupied;
+}
+
+TEST(MemorySegmentTest, TestLongAccess) {
+    auto pool = paimon::GetDefaultPool();
+    auto lrand = []() -> int64_t {
+        return (static_cast<int64_t>(std::rand()) << (sizeof(int32_t) * 8)) | std::rand();
+    };
+    int32_t page_size = 64 * 1024;
+    MemorySegment segment = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+
+    int64_t seed = DateTimeUtils::GetCurrentUTCTimeUs();
+    std::srand(seed);
+
+    for (int32_t i = 0; i <= page_size - 8; i += 8) {
+        segment.PutValue<int64_t>(i, lrand());
+    }
+
+    std::srand(seed);
+    for (int32_t i = 0; i <= page_size - 8; i += 8) {
+        ASSERT_EQ(segment.GetValue<int64_t>(i), lrand()) << "seed: " << seed << ", idx:" << i;
+    }
+
+    // test expected correct behavior, random access
+
+    std::srand(seed);
+    bool* occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % (page_size - 7);
+        if (occupied[pos] || occupied[pos + 1] || occupied[pos + 2] || occupied[pos + 3] ||
+            occupied[pos + 4] || occupied[pos + 5] || occupied[pos + 6] || occupied[pos + 7]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+            occupied[pos + 1] = true;
+            occupied[pos + 2] = true;
+            occupied[pos + 3] = true;
+            occupied[pos + 4] = true;
+            occupied[pos + 5] = true;
+            occupied[pos + 6] = true;
+            occupied[pos + 7] = true;
+        }
+        segment.PutValue<int64_t>(pos, lrand());
+    }
+    delete[] occupied;
+
+    std::srand(seed);
+    occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % (page_size - 7);
+        if (occupied[pos] || occupied[pos + 1] || occupied[pos + 2] || occupied[pos + 3] ||
+            occupied[pos + 4] || occupied[pos + 5] || occupied[pos + 6] || occupied[pos + 7]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+            occupied[pos + 1] = true;
+            occupied[pos + 2] = true;
+            occupied[pos + 3] = true;
+            occupied[pos + 4] = true;
+            occupied[pos + 5] = true;
+            occupied[pos + 6] = true;
+            occupied[pos + 7] = true;
+        }
+
+        ASSERT_EQ(segment.GetValue<int64_t>(pos), lrand()) << "seed: " << seed << ", idx:" << pos;
+    }
+    delete[] occupied;
+}
+
+TEST(MemorySegmentTest, TestFloatAccess) {
+    auto pool = paimon::GetDefaultPool();
+    auto frand = []() -> int64_t {
+        return (static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX));
+    };
+
+    int32_t page_size = 64 * 1024;
+    MemorySegment segment = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+
+    int64_t seed = DateTimeUtils::GetCurrentUTCTimeUs();
+    std::srand(seed);
+
+    for (int32_t i = 0; i <= page_size - 4; i += 4) {
+        segment.PutValue<float>(i, frand());
+    }
+
+    std::srand(seed);
+    for (int32_t i = 0; i <= page_size - 4; i += 4) {
+        ASSERT_EQ(segment.GetValue<float>(i), frand()) << "seed: " << seed << ", idx:" << i;
+    }
+
+    // test expected correct behavior, random access
+
+    std::srand(seed);
+    bool* occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % (page_size - 3);
+        if (occupied[pos] || occupied[pos + 1] || occupied[pos + 2] || occupied[pos + 3]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+            occupied[pos + 1] = true;
+            occupied[pos + 2] = true;
+            occupied[pos + 3] = true;
+        }
+        segment.PutValue<float>(pos, frand());
+    }
+    delete[] occupied;
+
+    std::srand(seed);
+    occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % (page_size - 3);
+        if (occupied[pos] || occupied[pos + 1] || occupied[pos + 2] || occupied[pos + 3]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+            occupied[pos + 1] = true;
+            occupied[pos + 2] = true;
+            occupied[pos + 3] = true;
+        }
+
+        ASSERT_EQ(segment.GetValue<float>(pos), frand()) << "seed: " << seed << ", idx:" << pos;
+    }
+    delete[] occupied;
+}
+
+TEST(MemorySegmentTest, TestDoubleAccess) {
+    auto pool = paimon::GetDefaultPool();
+    auto lrand = []() -> int64_t {
+        return (static_cast<int64_t>(std::rand()) << (sizeof(int32_t) * 8)) | std::rand();
+    };
+    auto drand = [&]() -> int64_t {
+        return (static_cast<double>(lrand()) /
+                static_cast<double>(std::numeric_limits<int64_t>::max()));
+    };
+
+    int32_t page_size = 64 * 1024;
+    MemorySegment segment = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+
+    int64_t seed = DateTimeUtils::GetCurrentUTCTimeUs();
+    std::srand(seed);
+
+    for (int32_t i = 0; i <= page_size - 8; i += 8) {
+        segment.PutValue<double>(i, drand());
+    }
+
+    std::srand(seed);
+    for (int32_t i = 0; i <= page_size - 8; i += 8) {
+        ASSERT_EQ(segment.GetValue<double>(i), drand()) << "seed: " << seed << ", idx:" << i;
+    }
+
+    // test expected correct behavior, random access
+
+    std::srand(seed);
+    bool* occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % (page_size - 7);
+        if (occupied[pos] || occupied[pos + 1] || occupied[pos + 2] || occupied[pos + 3] ||
+            occupied[pos + 4] || occupied[pos + 5] || occupied[pos + 6] || occupied[pos + 7]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+            occupied[pos + 1] = true;
+            occupied[pos + 2] = true;
+            occupied[pos + 3] = true;
+            occupied[pos + 4] = true;
+            occupied[pos + 5] = true;
+            occupied[pos + 6] = true;
+            occupied[pos + 7] = true;
+        }
+        segment.PutValue<double>(pos, drand());
+    }
+    delete[] occupied;
+
+    std::srand(seed);
+    occupied = new bool[page_size];
+    std::memset(occupied, 0, page_size * sizeof(bool));
+
+    for (int32_t i = 0; i < 1000; i++) {
+        int32_t pos = std::rand() % (page_size - 7);
+        if (occupied[pos] || occupied[pos + 1] || occupied[pos + 2] || occupied[pos + 3] ||
+            occupied[pos + 4] || occupied[pos + 5] || occupied[pos + 6] || occupied[pos + 7]) {
+            continue;
+        } else {
+            occupied[pos] = true;
+            occupied[pos + 1] = true;
+            occupied[pos + 2] = true;
+            occupied[pos + 3] = true;
+            occupied[pos + 4] = true;
+            occupied[pos + 5] = true;
+            occupied[pos + 6] = true;
+            occupied[pos + 7] = true;
+        }
+
+        ASSERT_EQ(segment.GetValue<double>(pos), drand()) << "seed: " << seed << ", idx:" << pos;
+    }
+    delete[] occupied;
+}
+
+// ------------------------------------------------------------------------
+//  Bulk Byte Movements
+// ------------------------------------------------------------------------
+
+TEST(MemorySegmentTest, TestBulkByteAccess) {
+    auto pool = paimon::GetDefaultPool();
+    // test expected correct behavior with default offset / length
+    auto rand_bytes = [&](int32_t size) -> std::shared_ptr<Bytes> {
+        auto bytes = Bytes::AllocateBytes(size, pool.get());
+        for (int32_t i = 0; i < static_cast<int32_t>(bytes->size()); i++) {
+            (*bytes)[i] = static_cast<char>(std::rand());
+        }
+        return bytes;
+    };
+    {
+        int32_t page_size = 64 * 1024;
+        MemorySegment segment = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+
+        int64_t seed = DateTimeUtils::GetCurrentUTCTimeUs();
+        std::srand(seed);
+        for (int32_t i = 0; i < 8; i++) {
+            auto src = rand_bytes(page_size / 8);
+            segment.Put(i * (page_size / 8), *src);
+        }
+
+        std::srand(seed);
+
+        for (int32_t i = 0; i < 8; i++) {
+            std::shared_ptr<Bytes> expected = rand_bytes(page_size / 8);
+            std::shared_ptr<Bytes> actual = Bytes::AllocateBytes(page_size / 8, pool.get());
+            segment.Get(i * (page_size / 8), actual.get());
+            ASSERT_EQ(expected->size(), actual->size()) << "seed: " << seed << ", i:" << i;
+            ASSERT_EQ(std::memcmp(expected->data(), actual->data(), expected->size()), 0)
+                << "seed: " << seed << ", i:" << i;
+        }
+    }
+
+    // test expected correct behavior with specific offset / length
+    {
+        int32_t page_size = 64 * 1024;
+        MemorySegment segment = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+
+        int64_t seed = DateTimeUtils::GetCurrentUTCTimeUs();
+        std::srand(seed);
+        std::shared_ptr<Bytes> expected = rand_bytes(page_size);
+
+        for (int32_t i = 0; i < 16; i++) {
+            segment.Put(i * (page_size / 16), *expected, i * (page_size / 16), page_size / 16);
+        }
+        auto actual = Bytes::AllocateBytes(page_size, pool.get());
+        for (int32_t i = 0; i < 16; i++) {
+            segment.Get(i * (page_size / 16), actual.get(), i * (page_size / 16), page_size / 16);
+        }
+        ASSERT_EQ(expected->size(), actual->size()) << "seed: " << seed;
+        ASSERT_EQ(std::memcmp(expected->data(), actual->data(), expected->size()), 0)
+            << "seed: " << seed;
+    }
+    // put segments of various lengths to various positions
+    {
+        int64_t seed = DateTimeUtils::GetCurrentUTCTimeUs();
+        std::srand(seed);
+        int32_t page_size = 64 * 1024;
+        MemorySegment segment = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+        auto expected = Bytes::AllocateBytes(page_size, pool.get());
+        segment.Put(0, *expected, 0, page_size);
+        for (int32_t i = 0; i < 200; i++) {
+            int32_t num_bytes = std::rand() % (page_size - 10) + 1;
+            int32_t pos = std::rand() % (page_size - num_bytes + 1);
+            std::shared_ptr<Bytes> data = rand_bytes((std::rand() % 3 + 1) * num_bytes);
+            int32_t data_start_pos = std::rand() % (data->size() - num_bytes + 1);
+
+            // copy to the expected
+            std::memcpy(expected->data() + pos, data->data() + data_start_pos, num_bytes);
+
+            // put to the memory segment
+            segment.Put(pos, *data, data_start_pos, num_bytes);
+        }
+
+        auto validation = Bytes::AllocateBytes(page_size, pool.get());
+        segment.Get(0, validation.get());
+        ASSERT_EQ(std::memcmp(validation->data(), expected->data(), expected->size()), 0)
+            << "seed: " << seed;
+    }
+    // get segments with various contents
+    {
+        int64_t seed = DateTimeUtils::GetCurrentUTCTimeUs();
+        std::srand(seed);
+        int32_t page_size = 64 * 1024;
+        MemorySegment segment = MemorySegment::AllocateHeapMemory(page_size, pool.get());
+        std::shared_ptr<Bytes> contents = rand_bytes(page_size);
+        segment.Put(0, *contents);
+
+        for (int32_t i = 0; i < 200; i++) {
+            int32_t num_bytes = std::rand() % (page_size / 8) + 1;
+            int32_t pos = std::rand() % (page_size - num_bytes + 1);
+            std::shared_ptr<Bytes> data = rand_bytes((std::rand() % 3 + 1) * num_bytes);
+            int32_t data_start_pos = std::rand() % (data->size() - num_bytes + 1);
+
+            segment.Get(pos, data.get(), data_start_pos, num_bytes);
+            Bytes expected(num_bytes, pool.get());
+            std::memcpy(expected.data(), contents->data() + pos, num_bytes);
+            Bytes validation(num_bytes, pool.get());
+            std::memcpy(validation.data(), data->data() + data_start_pos, num_bytes);
+            ASSERT_EQ(std::memcmp(validation.data(), expected.data(), expected.size()), 0)
+                << "seed: " << seed << ", i:" << i;
+        }
+    }
+}
+
+TEST(MemorySegmentTest, TestEqual) {
+    auto pool = paimon::GetDefaultPool();
+    auto seg1 = MemorySegment::Wrap(std::make_shared<Bytes>("abcd", pool.get()));
+    auto seg2 = MemorySegment::Wrap(std::make_shared<Bytes>("abce", pool.get()));
+    auto seg3 = MemorySegment::Wrap(std::make_shared<Bytes>("abcd", pool.get()));
+    ASSERT_EQ(seg1, seg1);
+    ASSERT_EQ(seg1, seg3);
+    ASSERT_FALSE(seg1 == seg2);
+    ASSERT_FALSE(seg2 == seg1);
+}
+
+TEST(MemorySegmentTest, TestNonOwningWrapView) {
+    // Prepare owning data as source
+    auto pool = paimon::GetDefaultPool();
+    std::string source_data = "Hello, WrapView MemorySegment!";
+    auto owning_bytes = std::make_shared<Bytes>(source_data, pool.get());
+    const char* raw_ptr = owning_bytes->data();
+    auto raw_size = static_cast<int32_t>(owning_bytes->size());
+
+    // Create non-owning segment via WrapView
+    auto seg = MemorySegment::WrapView(raw_ptr, raw_size);
+
+    // --- Data() / Size() ---
+    ASSERT_EQ(seg.Data(), raw_ptr);
+    ASSERT_EQ(seg.Size(), raw_size);
+
+    // --- Get(index) ---
+    for (int32_t i = 0; i < raw_size; ++i) {
+        ASSERT_EQ(seg.Get(i), source_data[i]);
+    }
+
+    // --- GetValue<T> ---
+    // Read first 4 bytes as int32
+    int32_t expected_int;
+    std::memcpy(&expected_int, raw_ptr, sizeof(int32_t));
+    ASSERT_EQ(seg.GetValue<int32_t>(0), expected_int);
+
+    // Read first 8 bytes as int64
+    int64_t expected_long;
+    std::memcpy(&expected_long, raw_ptr, sizeof(int64_t));
+    ASSERT_EQ(seg.GetValue<int64_t>(0), expected_long);
+
+    // --- MutableData() + Put(index, char) ---
+    char original_char = seg.Get(0);
+    seg.Put(0, 'X');
+    ASSERT_EQ(seg.Get(0), 'X');
+    seg.Put(0, original_char);  // restore
+    ASSERT_EQ(seg.Get(0), original_char);
+
+    // --- Put(index, src, offset, length) ---
+    std::string patch = "AB";
+    seg.Put(0, patch, 0, 2);
+    ASSERT_EQ(seg.Get(0), 'A');
+    ASSERT_EQ(seg.Get(1), 'B');
+
+    // --- PutValue<T> ---
+    int16_t val16 = 0x1234;
+    seg.PutValue<int16_t>(0, val16);
+    ASSERT_EQ(seg.GetValue<int16_t>(0), val16);
+
+    // --- Compare ---
+    auto seg2 = MemorySegment::WrapView(raw_ptr, raw_size);
+    // Both point to same data (we mutated seg's underlying data, seg2 sees it too)
+    ASSERT_EQ(seg.Compare(seg2, 0, 0, raw_size), 0);
+
+    // --- EqualTo ---
+    ASSERT_TRUE(seg.EqualTo(seg2, 2, 2, raw_size - 2));
+
+    // --- CopyTo owning target ---
+    auto target = MemorySegment::AllocateHeapMemory(raw_size, pool.get());
+    seg.CopyTo(0, &target, 0, raw_size);
+    ASSERT_EQ(seg.Compare(target, 0, 0, raw_size), 0);
+
+    // --- CopyToUnsafe ---
+    std::vector<char> buf(raw_size);
+    seg.CopyToUnsafe(0, buf.data(), 0, raw_size);
+    ASSERT_EQ(std::memcmp(buf.data(), seg.Data(), raw_size), 0);
+
+    // --- GetOrCreateHeapMemory on non-owning: should copy ---
+    auto heap = seg.GetOrCreateHeapMemory(pool.get());
+    ASSERT_NE(heap, nullptr);
+    ASSERT_EQ(static_cast<int32_t>(heap->size()), raw_size);
+    // Returned copy should be independent: modifying seg shouldn't affect heap
+    seg.Put(0, 'Z');
+    ASSERT_NE((*heap)[0], 'Z');
+
+    // --- operator== ---
+    auto seg3 = MemorySegment::WrapView(seg.Data(), seg.Size());
+    ASSERT_EQ(seg, seg3);
+}
+}  // namespace paimon::test
