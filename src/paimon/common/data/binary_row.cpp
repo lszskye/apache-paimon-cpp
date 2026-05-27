@@ -31,7 +31,9 @@
 
 namespace paimon {
 const int64_t BinaryRow::FIRST_BYTE_ZERO =
-    (SystemByteOrder() == ByteOrder::PAIMON_LITTLE_ENDIAN) ? (~0xFFL) : (~(0xFFL << 56L));
+    (SystemByteOrder() == ByteOrder::PAIMON_LITTLE_ENDIAN)
+        ? static_cast<int64_t>(~0xFFULL)
+        : static_cast<int64_t>(~(0xFFULL << 56));
 
 const BinaryRow& BinaryRow::EmptyRow() {
     static const BinaryRow empty_row = GetEmptyRow();
