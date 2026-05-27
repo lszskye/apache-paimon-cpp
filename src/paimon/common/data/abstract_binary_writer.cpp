@@ -199,24 +199,24 @@ int32_t AbstractBinaryWriter::RoundNumberOfBytesToNearestWord(int32_t num_bytes)
         return num_bytes + (8 - remainder);
     }
 }
+
 template <typename T>
 void AbstractBinaryWriter::WriteBytesToFixLenPart(MemorySegment* segment, int32_t field_offset,
                                                   const T& bytes, int32_t len) {
-    int64_t first_byte = len | 0x80;  // first bit is 1, other bits is len
-    int64_t seven_bytes = 0L;         // real data
+    const uint64_t first_byte =
+        static_cast<uint64_t>(len) | 0x80U;  // first bit is 1, low 7 bits are len
+    uint64_t seven_bytes = 0U;               // real data
     if ((SystemByteOrder() == ByteOrder::PAIMON_LITTLE_ENDIAN)) {
         for (int32_t i = 0; i < len; i++) {
-            seven_bytes |= ((0x00000000000000FFL & bytes[i]) << (i * 8L));
+            seven_bytes |= (static_cast<uint64_t>(bytes[i]) & 0xFFU) << (i * 8U);
         }
     } else {
         for (int32_t i = 0; i < len; i++) {
-            seven_bytes |= ((0x00000000000000FFL & bytes[i]) << ((6 - i) * 8L));
+            seven_bytes |= (static_cast<uint64_t>(bytes[i]) & 0xFFU) << ((6 - i) * 8U);
         }
     }
-    const int64_t offset_and_size =
-        (first_byte << 56) |  // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
-        seven_bytes;
-    segment->PutValue<int64_t>(field_offset, offset_and_size);
+    const uint64_t offset_and_size = (first_byte << 56) | seven_bytes;
+    segment->PutValue<int64_t>(field_offset, static_cast<int64_t>(offset_and_size));
 }
 
 }  // namespace paimon
