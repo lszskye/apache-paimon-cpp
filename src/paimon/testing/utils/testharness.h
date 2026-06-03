@@ -7,14 +7,13 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 //  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
@@ -29,16 +28,48 @@
 // Assert utilities is adapted from RocksDB
 // https://github.com/facebook/rocksdb/blob/main/test_util/testharness.h
 
+// Copyright 2024 Google LLC.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// UniqueTestDirectory utility is adapted from LiteRT
+// https://github.com/google-ai-edge/LiteRT/blob/main/litert/test/common.h
+
 #pragma once
 
+#include <filesystem>
+#include <map>
+#include <memory>
 #include <string>
+#include <utility>
 
 #include "gtest/gtest.h"
 #include "paimon/macros.h"
 #include "paimon/result.h"
 #include "paimon/status.h"
 
+namespace paimon {
+class FileSystem;
+class Status;
+}  // namespace paimon
+
 namespace paimon::test {
+
+std::string GetDataDir();
+std::map<std::string, std::string> GetJindoTestOptions();
+std::string GetJindoTestDir();
+
+int64_t RandomNumber(int64_t min, int64_t max);
 
 ::testing::AssertionResult AssertStatus(const char* s_expr, const Status& s);
 
@@ -74,5 +105,36 @@ namespace paimon::test {
 
 #define EXPECT_OK(s) EXPECT_PRED_FORMAT1(paimon::test::AssertStatus, s)
 #define EXPECT_NOK(s) EXPECT_FALSE((s).ok())
+
+class UniqueTestDirectory {
+ public:
+    static std::unique_ptr<UniqueTestDirectory> Create(const std::string& fs_identifier = "local");
+    ~UniqueTestDirectory();
+
+    UniqueTestDirectory(const UniqueTestDirectory&) = delete;
+    UniqueTestDirectory(UniqueTestDirectory&&) = default;
+    UniqueTestDirectory& operator=(const UniqueTestDirectory&) = delete;
+    UniqueTestDirectory& operator=(UniqueTestDirectory&&) = default;
+
+    const std::string& Str() const {
+        return tmpdir_;
+    }
+
+    std::shared_ptr<FileSystem> GetFileSystem() const {
+        return fs_;
+    }
+
+ private:
+    UniqueTestDirectory(const std::string& tmpdir, std::shared_ptr<FileSystem>&& fs)
+        : tmpdir_(tmpdir), fs_(std::move(fs)) {}
+    std::string tmpdir_;
+    std::shared_ptr<FileSystem> fs_;
+};
+
+class TestUtil {
+ public:
+    static bool CopyDirectory(const std::filesystem::path& source,
+                              const std::filesystem::path& destination);
+};
 
 }  // namespace paimon::test

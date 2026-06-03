@@ -1,0 +1,144 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "paimon/common/utils/var_length_int_utils.h"
+
+#include <cstring>
+#include <limits>
+#include <vector>
+
+#include "gtest/gtest.h"
+#include "paimon/testing/utils/testharness.h"
+
+namespace paimon::test {
+TEST(VarLengthIntUtilsTest, TestEncodeAndDecodeInt) {
+    std::vector<int32_t> test_values = {0,    1,     127,    128,     255,      256,
+                                        1000, 10000, 100000, 1000000, 10000000, 2147483647};
+
+    for (int32_t value : test_values) {
+        char buffer[VarLengthIntUtils::kMaxVarIntSize];
+        std::memset(buffer, 0, sizeof(buffer));
+
+        ASSERT_OK_AND_ASSIGN(int32_t encoded_length, VarLengthIntUtils::EncodeInt(value, buffer));
+
+        int32_t offset = 0;
+        ASSERT_OK_AND_ASSIGN(int32_t decoded_value, VarLengthIntUtils::DecodeInt(buffer, &offset));
+
+        ASSERT_EQ(value, decoded_value) << "Encoded and decoded values don't match for: " << value;
+        ASSERT_EQ(offset, encoded_length) << "Offset doesn't match encoded length for: " << value;
+    }
+}
+
+TEST(VarLengthIntUtilsTest, TestEncodeAndDecodeLong) {
+    std::vector<int64_t> test_values = {0ll,
+                                        127ll,
+                                        128ll,
+                                        16383ll,
+                                        16384ll,
+                                        2097151ll,
+                                        2097152ll,
+                                        268435455ll,
+                                        268435456ll,
+                                        1234567890123456789ll,
+                                        202405170000000000ll,
+                                        999999999999999999ll,
+                                        std::numeric_limits<int64_t>::max()};
+
+    for (int64_t value : test_values) {
+        char buffer[VarLengthIntUtils::kMaxVarLongSize + 1];
+        std::memset(buffer, 0, sizeof(buffer));
+
+        ASSERT_OK_AND_ASSIGN([[maybe_unused]] int32_t encoded_length,
+                             VarLengthIntUtils::EncodeLong(value, buffer));
+
+        int32_t offset = 0;
+        ASSERT_OK_AND_ASSIGN(int64_t decoded_value, VarLengthIntUtils::DecodeLong(buffer, &offset));
+
+        ASSERT_EQ(value, decoded_value) << "Encoded and decoded values don't match for: " << value;
+    }
+}
+
+TEST(VarLengthIntUtilsTest, TestEncodeNegativeValue) {
+    char buffer[VarLengthIntUtils::kMaxVarIntSize];
+    ASSERT_NOK_WITH_MSG(VarLengthIntUtils::EncodeInt(-1, buffer),
+                        "negative value: v=-1 for VarLengthInt Encoding");
+}
+
+TEST(VarLengthIntUtilsTest, TestEncodeNegativeLongValue) {
+    char buffer[VarLengthIntUtils::kMaxVarLongSize + 1];
+    ASSERT_NOK_WITH_MSG(VarLengthIntUtils::EncodeLong(-1, buffer),
+                        "negative value: v=-1 for VarLengthInt Encoding");
+}
+
+TEST(VarLengthIntUtilsTest, TestEncodeIntSequential) {
+    char buffer[VarLengthIntUtils::kMaxVarIntSize * 2];
+    std::memset(buffer, 0, sizeof(buffer));
+    int32_t value1 = 100;
+    int32_t value2 = 200;
+
+    ASSERT_OK_AND_ASSIGN(auto length1, VarLengthIntUtils::EncodeInt(value1, buffer));
+    ASSERT_OK_AND_ASSIGN([[maybe_unused]] auto length2,
+                         VarLengthIntUtils::EncodeInt(value2, buffer + length1));
+
+    int32_t offset = 0;
+    ASSERT_OK_AND_ASSIGN(int32_t decoded_result1, VarLengthIntUtils::DecodeInt(buffer, &offset));
+    ASSERT_EQ(value1, decoded_result1);
+    ASSERT_OK_AND_ASSIGN(int32_t decoded_result2, VarLengthIntUtils::DecodeInt(buffer, &offset));
+    ASSERT_EQ(value2, decoded_result2);
+}
+
+TEST(VarLengthIntUtilsTest, TestEncodeBytesNumber) {
+    std::vector<int32_t> values = {
+        0x7F,       // 127 - fits in 1 byte
+        0x80,       // 128 - needs 2 bytes
+        0x4000,     // 16384 - needs 3 bytes
+        0x200000,   // 2097152 - needs 4 bytes
+        2147483647  // 2147483647 - needs 5 bytes
+    };
+
+    for (int32_t i = 0; i < static_cast<int32_t>(values.size()); ++i) {
+        char buffer[VarLengthIntUtils::kMaxVarIntSize];
+        std::memset(buffer, 0, sizeof(buffer));
+        ASSERT_OK_AND_ASSIGN(int32_t encoded_length,
+                             VarLengthIntUtils::EncodeInt(values[i], buffer));
+        ASSERT_EQ(encoded_length, i + 1);
+    }
+}
+
+TEST(VarLengthIntUtilsTest, TestEncodeLongBytesNumber) {
+    std::vector<int64_t> values = {
+        0x7F,                                // 127 - fits in 1 byte
+        0x80,                                // 128 - needs 2 bytes
+        0x4000,                              // 16384 - needs 3 bytes
+        0x200000,                            // 2097152 - needs 4 bytes
+        2147483647,                          // 2147483647 - needs 5 bytes
+        34359738368ll,                       // 0x800000000 - needs 6 bytes
+        562949953421311ll,                   // 0x1FFFFFFFFFFFFF - needs 7 bytes
+        72057594037927935ll,                 // 0xFFFFFFFFFFFFFF - needs 8 bytes
+        std::numeric_limits<int64_t>::max()  // needs 9 bytes
+    };
+
+    for (int32_t i = 0; i < static_cast<int32_t>(values.size()); ++i) {
+        char buffer[VarLengthIntUtils::kMaxVarLongSize + 1];
+        std::memset(buffer, 0, sizeof(buffer));
+        ASSERT_OK_AND_ASSIGN(int32_t encoded_length,
+                             VarLengthIntUtils::EncodeLong(values[i], buffer));
+        ASSERT_EQ(encoded_length, i + 1) << values[i];
+    }
+}
+}  // namespace paimon::test

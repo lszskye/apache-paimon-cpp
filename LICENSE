@@ -256,6 +256,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 --------------------------------------------------------------------------------
 
+This product includes code from LiteRT.
+
+* UniqueTestDirectory utility in src/paimon/testing/utils/testharness.cpp and src/paimon/testing/utils/testharness.h
+
+Copyright: 2024 Google LLC.
+Home page: https://ai.google.dev/edge/litert
+License: https://www.apache.org/licenses/LICENSE-2.0
+
+--------------------------------------------------------------------------------
+
 This product includes code from Apache Arrow.
 
 * Core utilities:
