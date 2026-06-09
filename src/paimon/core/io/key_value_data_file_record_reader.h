@@ -1,0 +1,100 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#pragma once
+
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "arrow/type_fwd.h"
+#include "paimon/core/io/key_value_record_reader.h"
+#include "paimon/core/key_value.h"
+#include "paimon/reader/file_batch_reader.h"
+#include "paimon/result.h"
+#include "paimon/utils/roaring_bitmap32.h"
+
+namespace arrow {
+class Array;
+class Int64Type;
+class Int8Type;
+class Schema;
+class StructArray;
+template <typename TypeClass>
+class NumericArray;
+}  // namespace arrow
+
+namespace paimon {
+class MemoryPool;
+class Metrics;
+struct ColumnarBatchContext;
+
+// Convert the arrow array of data file into a KeyValue object iterator (parsing SEQUENCE_NUMBER and
+// VALUE_KIND columns)
+class KeyValueDataFileRecordReader : public KeyValueRecordReader {
+ public:
+    KeyValueDataFileRecordReader(std::unique_ptr<FileBatchReader>&& reader,
+                                 const std::shared_ptr<arrow::Schema>& key_schema,
+                                 const std::shared_ptr<arrow::Schema>& value_schema, int32_t level,
+                                 const std::shared_ptr<MemoryPool>& pool);
+
+    class Iterator : public KeyValueRecordReader::Iterator {
+     public:
+        Iterator(KeyValueDataFileRecordReader* reader, int64_t previous_batch_first_row_number)
+            : previous_batch_first_row_number_(previous_batch_first_row_number), reader_(reader) {}
+        Result<bool> HasNext() const override;
+        Result<KeyValue> Next() override;
+        Result<std::pair<int64_t, KeyValue>> NextWithFilePos();
+
+     private:
+        int64_t previous_batch_first_row_number_;
+        mutable int64_t cursor_ = 0;
+        KeyValueDataFileRecordReader* reader_ = nullptr;
+    };
+
+    Result<std::unique_ptr<KeyValueRecordReader::Iterator>> NextBatch() override;
+
+    std::shared_ptr<Metrics> GetReaderMetrics() const override {
+        return reader_->GetReaderMetrics();
+    }
+
+    void Close() override {
+        Reset();
+        reader_->Close();
+    }
+
+    // virtual for test
+    virtual void Reset();
+
+ private:
+    int32_t level_;
+    std::shared_ptr<MemoryPool> pool_;
+    std::unique_ptr<FileBatchReader> reader_;
+    std::shared_ptr<arrow::Schema> key_schema_;
+    std::shared_ptr<arrow::Schema> value_schema_;
+    std::vector<std::string> value_names_;
+    RoaringBitmap32 selection_bitmap_;
+    std::shared_ptr<arrow::NumericArray<arrow::Int64Type>> sequence_number_array_;
+    std::shared_ptr<arrow::NumericArray<arrow::Int8Type>> row_kind_array_;
+
+ protected:
+    std::shared_ptr<ColumnarBatchContext> key_ctx_;
+    std::shared_ptr<ColumnarBatchContext> value_ctx_;
+};
+}  // namespace paimon
